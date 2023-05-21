@@ -11,4 +11,4 @@ RUN MRSM_PLUGINS_DIR='/app/plugins' mrsm show plugins && \
     [ "$PLUGINS" ] && \
     mrsm compose install required || true
 
-ENTRYPOINT ["/bin/bash", "/app/docker/bootstrap.sh"]
+ENTRYPOINT ["/app/docker/bootstrap.sh"]

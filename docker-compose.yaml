@@ -6,26 +6,22 @@ services:
       context: "./"
       dockerfile: "./docker/Dockerfile"
 
-    ### Override the `/docker/bootstrap.sh` entrypoint for testing.
-    entrypoint: ["/bin/bash"]
-
+    entrypoint: ["/app/docker/sleep_forever.sh"]
     environment:
 
-      ### NOTE: Do not store secrets in your compose file;
-      ###       you may reference individual keys
-      ###       or the entire JSON from an environment variable.
-      MRSM_EXAMPLE_SECRET: |-
+      MRSM_MONGODB_LOCAL: |-
         {
-          "username": "foo",
-          "password": "bar"
+          "uri": "mongodb://localhost:27017",
+          "database": "meerschaum"
         }
-
-      ### Feel free to override `sql:main` or add your own connectors.
-      ### Just make sure you also add them to `mrsm-compose.yaml` using the `MRSM{}` syntax.
-      # MRSM_SQL_MAIN: $MRSM_SQL_MAIN
 
     network_mode: "host"
     volumes:
       - "./:/app"
     init: true
     tty: true
+    stdin_open: true
+
+  mongodb:
+    image: "mongo"
+    network_mode: "host"

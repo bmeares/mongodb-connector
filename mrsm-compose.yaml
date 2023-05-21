@@ -2,37 +2,34 @@
 ### Omit to create a local dir (defaults to ./root).
 root_dir: "/meerschaum"
 
+plugins_dir:
+  - "/meerschaum/plugins"
+  - "/app/plugins"
+
+plugins:
+  - "stress"
+
 ### All pipes are tagged with the project name
 ### (defaults to directory name).
-project_name: "example-project"
+project_name: "mongodb-connector"
 
 ### 1. Module-level `fetch()` (plugin:example)
 ### 2. Custom connector `fetch()` (example:secret)
 sync:
   pipes:
-    - connector: "plugin:example"
-      metric: "foo"
-      location: "bar"
+    - connector: "plugin:stress"
+      metric: "test"
       parameters:
-        datetime: "timestamp"
-        id: "id"
-
-    - connector: "example:secret"
-      metric: "foo"
-      location: "bar"
-      parameters:
-        datetime: "timestamp"
-        id: "id"
+        fetch:
+          rows: 10000
 
 ### Define the MRSM_CONFIG for this isolated project.
 config:
   meerschaum:
-    instance: "sql:main"
+    instance: "mongodb:local"
     connectors:
-      sql:
-        main: MRSM{meerschaum:connectors:sql:main}
-      example:
-        secret: MRSM{meerschaum:connectors:example:secret}
+      mongodb:
+        local: MRSM{meerschaum:connectors:mongodb:local}
 
 ### Other environment variables to include (e.g. AWS creds).
 environment: {}
