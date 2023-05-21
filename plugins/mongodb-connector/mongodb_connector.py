@@ -38,6 +38,12 @@ class MongoDBConnector(Connector):
         get_pipe_columns_types,
         get_pipe_data,
         get_backtrack_data,
+        create_indices,
+    )
+    from ._mongo import (
+        build_query,
+        coerce_str_to_datetime,
+        truncate_datetime,
     )
 
     @property
@@ -69,3 +75,31 @@ class MongoDBConnector(Connector):
         Return the `pipes` collection.
         """
         return self.database['pipes']
+
+
+    @property
+    def ASCENDING(self) -> 'pymongo.ASCENDING':
+        """
+        Return the `pymongo.ASCENDING` constant.
+        """
+        _ASCENDING = self.__dict__.get('_ASCENDING', None)
+        if _ASCENDING is not None:
+            return _ASCENDING
+        with mrsm.Venv('mongodb-connector'):
+            import pymongo
+            self._ASCENDING = pymongo.ASCENDING
+        return self._ASCENDING
+
+
+    @property
+    def DESCENDING(self) -> 'pymongo.DESCENDING':
+        """
+        Return the `pymongo.DESCENDING` constant.
+        """
+        _DESCENDING = self.__dict__.get('_DESCENDING', None)
+        if _DESCENDING is not None:
+            return _DESCENDING
+        with mrsm.Venv('mongodb-connector'):
+            import pymongo
+            self._DESCENDING = pymongo.DESCENDING
+        return self._DESCENDING

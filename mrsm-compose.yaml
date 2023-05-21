@@ -21,7 +21,8 @@ sync:
       metric: "test"
       parameters:
         fetch:
-          rows: 10000
+          rows: 1
+          ids: 1
 
 ### Define the MRSM_CONFIG for this isolated project.
 config:

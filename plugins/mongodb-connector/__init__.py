@@ -6,7 +6,7 @@
 Provide `MongoDBConnector`.
 """
 
-required = ['pymongo']
+required = ['pymongo', 'python-dateutil']
 
 from meerschaum.connectors import make_connector
 from .mongodb_connector import MongoDBConnector

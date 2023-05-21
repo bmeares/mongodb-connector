@@ -10,11 +10,12 @@ import copy
 import json
 import traceback
 import functools
-from datetime import datetime
+from datetime import datetime, timedelta
 import meerschaum as mrsm
 from meerschaum.utils.typing import (
     SuccessTuple, Any, Optional, Union, Dict, List, Tuple, Iterator, Iterable,
 )
+from meerschaum.utils.misc import json_serialize_datetime, round_time
 from meerschaum.utils.warnings import warn
 from meerschaum.utils.debug import dprint
 
@@ -192,42 +193,15 @@ def fetch_pipes_keys(
     """
     Return a list of tuples for the registered pipes' keys according to the provided filters.
     """
-    from meerschaum.utils.misc import separate_negation_values
-
-    in_ck, nin_ck = separate_negation_values([str(x) for x in (connector_keys or [])])
-    in_mk, nin_mk = separate_negation_values([str(x) for x in (metric_keys or [])])
-    in_lk, nin_lk = separate_negation_values([str(x) for x in (location_keys or [])])
-    in_tags, nin_tags = separate_negation_values([str(x) for x in (tags or [])])
-
-    query = {}
-    if connector_keys:
-        query['connector_keys'] = {}
-    if metric_keys:
-        query['metric_key'] = {}
-    if location_keys:
-        query['location_key'] = {}
-    if tags:
-        query['parameters.tags'] = {}
-
-    if in_ck:
-        query['connector_keys'].update({'$in': in_ck})
-    if nin_ck:
-        query['connector_keys'].update({'$nin': nin_ck})
-    if in_mk:
-        query['metric_key'].update({'$in': in_mk})
-    if nin_mk:
-        query['metric_key'].update({'$nin': nin_mk})
-    if in_lk:
-        query['location_key'].update({'$in': in_lk})
-    if nin_lk:
-        query['location_key'].update({'$nin': nin_lk})
-    if in_tags:
-        query['parameters.tags'].update({'$in': in_tags})
-    if nin_tags:
-        query['parameters.tags'].update({'$nin': nin_tags})
-
+    query = self.build_query({
+        'connector_keys': [str(x) for x in (connector_keys or [])],
+        'metric_key': [str(x) for x in (metric_keys or [])],
+        'location_key': [str(x) for x in (location_keys or [])],
+        'parameters.tags': [str(x) for x in (tags or [])],
+    })
     if debug:
         dprint(json.dumps(query))
+
     try:
         results = [
             (doc['connector_keys'], doc['metric_key'], doc['location_key'])
@@ -298,8 +272,7 @@ def drop_pipe(
     return True, "Success"
 
 
-@staticmethod
-def get_document_id(document: Dict[str, Any], index_columns: List[str]) -> str:
+def get_document_id(self, document: Dict[str, Any], index_columns: List[str]) -> str:
     """
     Return the unique ID for this document based on the indicated indices.
 
@@ -310,7 +283,18 @@ def get_document_id(document: Dict[str, Any], index_columns: List[str]) -> str:
         Missing indices will be replaced with `null`.
     """
     return {
-        key: document.get(key, None)
+        key: json.dumps(
+            document.get(key, None),
+            sort_keys = True,
+            separators = (',', ':'),
+            default = (
+                lambda x: (
+                    json_serialize_datetime(self.truncate_datetime(x))
+                    if isinstance(x, datetime)
+                    else str(x)
+                )
+            ),
+        )
         for key in sorted(index_columns)
     }
 
@@ -345,6 +329,8 @@ def sync_pipe(
     if df is None:
         return False, f"Received `None`, cannot sync {pipe}."
 
+    is_new = not pipe.exists(debug=debug)
+
     is_df_like = isinstance(df, (list, dict, str)) or 'DataFrame' in str(type(df))
     if not is_df_like and isinstance(df, (Iterator, Iterable)):
         from meerschaum.utils.pool import get_pool
@@ -369,16 +355,20 @@ def sync_pipe(
         return False, f"Received {type(df)}, cannot sync {pipe}."
 
     with mrsm.Venv('mongodb-connector'):
-        from pymongo import UpdateOne
+        from pymongo import UpdateOne, InsertOne
 
     from meerschaum.utils.misc import parse_df_datetimes
     df = parse_df_datetimes(df)
 
-    index_cols = sorted(list(pipe.columns.values()))
-
-    df['_id'] = df.apply(lambda doc: self.get_document_id(doc, index_cols), axis=1)
+    index_cols = sorted([col for col in pipe.columns.values() if col is not None])
+    if index_cols:
+        df['_id'] = df.apply(lambda doc: self.get_document_id(doc, index_cols), axis=1)
     upserts = [
-        UpdateOne({'_id': doc['_id']}, {'$setOnInsert': doc}, upsert=True)
+        (
+            UpdateOne({'_id': doc['_id']}, {'$setOnInsert': doc}, upsert=True)
+            if index_cols
+            else InsertOne(doc)
+        )
         for doc in df.to_dict(orient='records')
     ]
     try:
@@ -386,6 +376,12 @@ def sync_pipe(
         success, message = True, f"Successfully synced {len(df)} documents."
     except Exception as e:
         success, message = False, f"Failed to sync {len(df)} documents:\n{traceback.format_exc()}"
+
+    if is_new:
+        index_success, index_message = self.create_indices(pipe, debug=debug)
+        if not index_success:
+            return index_success, index_message
+
     return success, message
 
 
@@ -440,7 +436,15 @@ def get_sync_time(
     -------
     The largest `datetime` or `int` value of the `datetime` axis. 
     """
+    dt_col = pipe.columns.get('datetime', None)
+    if not dt_col:
+        return None
 
+    return (
+        self.database[pipe.target].find_one(sort=[(dt_col, self.DESCENDING)])
+        or
+        {}
+    ).get(dt_col, None)
 
 def get_pipe_columns_types(
         self,
@@ -449,6 +453,7 @@ def get_pipe_columns_types(
         **kwargs: Any
     ) -> Dict[str, str]:
     """
+    Return the data types for the columns in the collection for data type enforcement.
     """
     return {}
 
@@ -459,6 +464,7 @@ def get_pipe_data(
         begin: Union[datetime, int, None] = None,
         end: Union[datetime, int, None] = None,
         params: Optional[Dict[str, Any]] = None,
+        with_id: bool = False,
         debug: bool = False,
         **kwargs: Any
     ) -> Union['pd.DataFrame', None]:
@@ -479,6 +485,9 @@ def get_pipe_data(
     params: Optional[Dict[str, str]], default None
         Additional filters to apply the query.
 
+    with_id: bool, default False
+        If `True`, return the `_id` field on the DataFrame.
+
     Returns
     -------
     The collection's data as a DataFrame.
@@ -487,19 +496,95 @@ def get_pipe_data(
         return None
 
     from meerschaum.utils.misc import parse_df_datetimes
-    query = {}
-    result = self.database[pipe.target].find(query)
+    query = self.build_query(params, pipe.columns.get('datetime', None), begin, end)
+    result = self.database[pipe.target].find(query, {'_id': (1 if with_id else 0)})
     if result is None:
         return None
-    return parse_df_datetimes([{k: v for k, v in doc.items() if k != '_id'} for doc in result])
+    return parse_df_datetimes(result)
 
 
 def get_backtrack_data(
         self,
         pipe: mrsm.Pipe,
+        backtrack_minutes: int = 0,
+        begin: Union[datetime, int] = None, 
+        params: Optional[Dict[str, Any]] = None,
         debug: bool = False,
         **kwargs: Any
     ) -> 'pd.DataFrame':
     """
+    Return the most recent interval of data leading up to `begin` (defaults to the sync time).
+
+    Parameters
+    ----------
+    pipe: mrsm.Pipe
+        The pipe to fetch data from.
+
+    backtrack_minutes: int, default 0
+        The number of minutes leading up to `begin` from which to search.
+        If `begin` is an integer, then subtract this value from `begin`.
+
+    begin: Union[datetime, int, None], default None
+        The point from which to begin backtracking.
+        If `None`, then use the pipe's sync time (most recent datetime value).
+
+    params: Optional[Dict[str, Any]], default None
+        Additional filter parameters.
+
+    Returns
+    -------
+    A Pandas DataFrame for the interval of size `backtrack_minutes` leading up to `begin`.
     """
-    return self.get_pipe_data(pipe)
+    if begin is None:
+        begin = pipe.get_sync_time(debug=debug)
+
+    backtrack_interval = (
+        timedelta(minutes=backtrack_minutes)
+        if isinstance(begin, datetime)
+        else backtrack_minutes
+    )
+    if begin is not None:
+        begin = begin - backtrack_interval
+
+    return self.get_pipe_data(
+        pipe,
+        begin = begin,
+        params = params,
+        debug = debug,
+        **kwargs
+    )
+
+
+def create_indices(
+        self,
+        pipe: mrsm.Pipe,
+        debug: bool = False,
+        **kwargs: Any
+    ) -> SuccessTuple:
+    """
+    Create the indices on the pipe's collection.
+
+    Parameters
+    ----------
+    pipe: mrsm.Pipe
+        The pipe on which to create the indices.
+
+    Returns
+    -------
+    A `SuccessTuple` indicating success.
+    """
+    index_cols = [col for col in pipe.columns.values() if col]
+    if debug:
+        dprint(f"Creating indices on {pipe}:\n  - " + '\n  - '.join(index_cols))
+    try:
+        self.database[pipe.target].create_index(
+            [
+                (col, self.ASCENDING)
+                for col in index_cols
+            ],
+            unique = True,
+        )
+        success, message = True, "Success"
+    except Exception as e:
+        success, message = False, f"Failed to create indices for {pipe}:\n{traceback.format_exc()}"
+    return success, message
