@@ -45,6 +45,9 @@ class MongoDBConnector(Connector):
         coerce_str_to_datetime,
         truncate_datetime,
     )
+    from ._fetch import (
+        fetch,
+    )
 
     @property
     def client(self) -> 'pymongo.MongoClient':

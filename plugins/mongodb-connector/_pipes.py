@@ -574,6 +574,9 @@ def create_indices(
     A `SuccessTuple` indicating success.
     """
     index_cols = [col for col in pipe.columns.values() if col]
+    if not index_cols:
+        return True, "No indices to create."
+
     if debug:
         dprint(f"Creating indices on {pipe}:\n  - " + '\n  - '.join(index_cols))
     try:

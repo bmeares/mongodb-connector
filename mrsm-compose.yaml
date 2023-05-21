@@ -24,6 +24,17 @@ sync:
           rows: 1
           ids: 1
 
+    - connector: "mongodb:local"
+      metric: "test"
+      parameters:
+        fetch:
+          collection: "plugin_stress_test"
+          query: {}
+          projection: {}
+      columns:
+        datetime: "datetime"
+        id: "id"
+
 ### Define the MRSM_CONFIG for this isolated project.
 config:
   meerschaum:

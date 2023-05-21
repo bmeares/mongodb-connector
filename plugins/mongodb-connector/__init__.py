@@ -6,7 +6,7 @@
 Provide `MongoDBConnector`.
 """
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'
 required = ['pymongo', 'python-dateutil']
 
 from meerschaum.connectors import make_connector
