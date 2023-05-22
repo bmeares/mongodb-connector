@@ -1,5 +1,4 @@
-### This is for re-using the existing Docker root.
-### Omit to create a local dir (defaults to ./root).
+project_name: "mongodb-connector"
 root_dir: "/meerschaum"
 
 plugins_dir:
@@ -9,12 +8,6 @@ plugins_dir:
 plugins:
   - "stress"
 
-### All pipes are tagged with the project name
-### (defaults to directory name).
-project_name: "mongodb-connector"
-
-### 1. Module-level `fetch()` (plugin:example)
-### 2. Custom connector `fetch()` (example:secret)
 sync:
   pipes:
     - connector: "plugin:stress"
@@ -35,7 +28,6 @@ sync:
         datetime: "datetime"
         id: "id"
 
-### Define the MRSM_CONFIG for this isolated project.
 config:
   meerschaum:
     instance: "mongodb:local"
@@ -43,5 +35,4 @@ config:
       mongodb:
         local: MRSM{meerschaum:connectors:mongodb:local}
 
-### Other environment variables to include (e.g. AWS creds).
 environment: {}
