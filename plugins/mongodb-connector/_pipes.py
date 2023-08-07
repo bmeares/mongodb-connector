@@ -236,7 +236,7 @@ def pipe_exists(
     A `bool` indicating the collection exists.
     """
     try:
-        self.database.validate_collection(pipe.target)
+        return (self.database[pipe.target].count() > 0)
     except Exception as e:
         if debug:
             dprint(str(e))
