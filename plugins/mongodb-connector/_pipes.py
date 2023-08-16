@@ -236,7 +236,7 @@ def pipe_exists(
     A `bool` indicating the collection exists.
     """
     try:
-        return (self.database[pipe.target].count() > 0)
+        return (pipe.get_rowcount(debug=debug) > 0)
     except Exception as e:
         if debug:
             dprint(str(e))
@@ -407,6 +407,8 @@ def get_pipe_rowcount(
         rowcount = self.database.get_collection(pipe.target).estimated_document_count()
     except Exception as e:
         rowcount = 0
+        if debug:
+            dprint(str(e))
     return rowcount
 
 
