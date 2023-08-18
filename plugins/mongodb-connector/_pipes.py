@@ -359,6 +359,8 @@ def sync_pipe(
 
     from meerschaum.utils.misc import parse_df_datetimes
     df = parse_df_datetimes(df)
+    if df.empty:
+        return True, "Received an empty dataframe, nothing to sync."
 
     index_cols = sorted([col for col in pipe.columns.values() if col is not None])
     if index_cols:

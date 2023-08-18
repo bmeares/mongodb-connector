@@ -9,6 +9,16 @@ services:
     entrypoint: ["/app/docker/sleep_forever.sh"]
     environment:
 
+      MRSM_PLUGINS_DIR: |-
+        ["/meerschaum/plugins", "/app/plugins"]
+
+      MRSM_CONFIG: |-
+        {
+          "meerschaum": {
+            "instance": "mongodb:local"
+          }
+        }
+
       MRSM_MONGODB_LOCAL: |-
         {
           "uri": "mongodb://localhost:27017",
@@ -21,6 +31,7 @@ services:
     init: true
     tty: true
     stdin_open: true
+    user: "meerschaum"
 
   mongodb:
     image: "mongo"
