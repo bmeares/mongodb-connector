@@ -367,7 +367,7 @@ def sync_pipe(
         df['_id'] = df.apply(lambda doc: self.get_document_id(doc, index_cols), axis=1)
     upserts = [
         (
-            UpdateOne({'_id': doc['_id']}, {'$setOnInsert': doc}, upsert=True)
+            UpdateOne({'_id': doc['_id']}, {'$set': doc}, upsert=True)
             if index_cols
             else InsertOne(doc)
         )
